@@ -1,0 +1,38 @@
+{
+  "name": "svfmt",
+  "displayName": "svfmt",
+  "description": "Formats (System)Verilog files using svfmt",
+  "version": "0.0.1",
+  "publisher": "svfmt",
+  "private": true,
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "svfmt",
+      "properties": {
+        "svfmt.path": {
+          "type": "string",
+          "default": "svfmt",
+          "description": "Path to the svfmt executable."
+        },
+        "svfmt.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra arguments inserted before \"--stdout -\" (e.g. [\"--indent\", \"4\"])."
+        }
+      }
+    }
+  }
+}

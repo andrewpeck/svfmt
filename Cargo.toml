@@ -1,0 +1,11 @@
+[package]
+name = "svfmt"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+clap = { version = "4.6.6", features = ["derive"] }
+regex = "1.13.1"
+similar = "3.2.0"
+toml = "1.1.4"

@@ -1,0 +1,262 @@
+#+title: svfmt
+
+Whitespace-only formatter for (System)Verilog sources.
+
+svfmt runs two independent passes, both of which only ever rewrite
+whitespace:
+
+- *indent* :: re-indent every line from a stack of open blocks and
+  delimiters.
+- *align* :: group consecutive similar lines into runs and pad them
+  into columns, so declarations, port lists, struct members,
+  assignments, named port connections and trailing comments line up.
+
+Neither pass reflows lines, reorders tokens, or edits comment text.
+Before writing anything, svfmt re-tokenizes its own output and
+compares it against the input token stream; if they differ for any
+reason, it refuses to touch the file rather than risk corrupting it.
+
+** Examples
+
+*** Declarations
+
+#+begin_src verilog
+  // before
+  module m;
+  logic [7:0] a;
+  logic b;
+  logic [3:0] c;
+  endmodule
+#+end_src
+
+#+begin_src verilog
+  // after
+  module m;
+    logic [7:0] a;
+    logic       b;
+    logic [3:0] c;
+  endmodule
+#+end_src
+
+*** Blocking and non-blocking assignments
+
+Both ~=~ and ~<=~ line up in the same column, since they play the same
+role in the statement:
+
+#+begin_src verilog
+  // before
+  always @(posedge clk) begin
+    a = compute();
+    b = b + 1;
+    c <= value;
+  end
+#+end_src
+
+#+begin_src verilog
+  // after
+  always @(posedge clk) begin
+    a  = compute();
+    b  = b + 1;
+    c <= value;
+  end
+#+end_src
+
+*** Parameters, with trailing comments
+
+The type, name, ~=~ and trailing comment each get their own column;
+a comment column is only as wide as it needs to be:
+
+#+begin_src verilog
+  // before
+  module top #(
+    parameter int PARAM_A = 3,
+    parameter real PARAM_B = 0.05, // note one
+    parameter real PARAM_C = 0.2, // note two
+    parameter logic PARAM_D = 0
+  ) (
+#+end_src
+
+#+begin_src verilog
+  // after
+  module top #(
+    parameter int   PARAM_A = 3,
+    parameter real  PARAM_B = 0.05, // note one
+    parameter real  PARAM_C = 0.2,  // note two
+    parameter logic PARAM_D = 0
+  ) (
+#+end_src
+
+*** Module instantiation
+
+Named port connections align their =(expr)=; an instance name that
+doesn't fit on the module name's line indents once and keeps its own
+column:
+
+#+begin_src verilog
+  // before
+  leaf u_leaf (
+    .clk(clk),
+    .index (some_index),
+    .valid_i (some_condition), // FIXME: placeholder
+    .result_o (results[i])
+  );
+#+end_src
+
+#+begin_src verilog
+  // after
+  leaf u_leaf (
+    .clk      (clk),
+    .index    (some_index),
+    .valid_i  (some_condition), // FIXME: placeholder
+    .result_o (results[i])
+  );
+#+end_src
+
+*** Struct members
+
+#+begin_src verilog
+  // before
+  typedef struct packed {
+    logic a;
+    logic [A-1:0] b;
+    logic [B-1:0] c;
+    logic [N-1:0][4:0] d;
+  } struct_one_t;
+#+end_src
+
+#+begin_src verilog
+  // after
+  typedef struct packed {
+    logic              a;
+    logic [A-1:0]      b;
+    logic [B-1:0]      c;
+    logic [N-1:0][4:0] d;
+  } struct_one_t;
+#+end_src
+
+*** Case labels
+
+#+begin_src verilog
+  // before
+  case ({a[i], b[i]})
+  2'b10: next[i] = count[i] + 1'b1;
+  2'b01: next[i] = count[i] - 1'b1;
+  default: next[i] = count[i];
+  endcase
+#+end_src
+
+#+begin_src verilog
+  // after
+  case ({a[i], b[i]})
+    2'b10:   next[i] = count[i] + 1'b1;
+    2'b01:   next[i] = count[i] - 1'b1;
+    default: next[i] = count[i];
+  endcase
+#+end_src
+
+Each example above was checked against the =svfmt= binary while
+writing this section, and most are trimmed from the fixtures
+=cargo test= checks in =tests/format_tests.rs=.
+
+** Building
+
+#+begin_src sh
+  cargo build --release
+  # binary at target/release/svfmt
+#+end_src
+
+** Usage
+
+#+begin_src sh
+  svfmt [OPTIONS] [PATHS]...
+#+end_src
+
+Each path may be a file or a directory, which is searched recursively
+for =.sv=, =.svh=, =.v= and =.vh= files. Pass a single =-= to read
+from stdin and write the result to stdout. Given at least one flag but
+no paths, the current directory is searched; run with no arguments at
+all and svfmt prints this help instead (equivalent to =--help=).
+
+| Flag                  | Effect                                                       |
+|-----------------------+---------------------------------------------------------------|
+| =--check=             | exit non-zero if any file would change; write nothing        |
+| =--diff=              | print a unified diff instead of writing                      |
+| =--stdout=            | write the formatted result to stdout (exactly one input file) |
+| =--align-only=        | skip the indentation pass                                    |
+| =--indent-only=       | skip the alignment pass                                      |
+| =--indent N=          | spaces per indent level (default 2)                           |
+| =-q, --quiet=         | do not report reformatted files                              |
+| =--config FILE=       | read settings from FILE instead of searching                 |
+| =--exclude PATTERN=   | skip paths matching PATTERN, in addition to configured ones (repeatable) |
+| =-h, --help=          | print the help page                                          |
+| =-V, --version=       | print the version                                            |
+
+*** Disabling formatting for a region
+
+#+begin_src verilog
+  // verilog-format: off
+  logic     a;
+  logic       bb;
+  // verilog-format: on
+#+end_src
+
+** Configuration
+
+Paths to skip are read from the first of =sv-format.toml=,
+=.sv-format.toml=, or =pyproject.toml= found in the working directory
+or one of its parents:
+
+#+begin_src toml
+  [tool.sv-format]
+  exclude = ["Top/*/registers.sv", "vendor"]
+#+end_src
+
+(A dedicated =sv-format.toml= or =.sv-format.toml= takes the
+=exclude= key at the top level, with no =[tool.sv-format]= table.)
+
+Patterns are relative to that file. One containing a =/= matches the
+path itself, or a parent directory of it; one without a =/= matches
+any single path component.
+
+** CI and releases
+
+[[file:.github/workflows/ci.yml][=ci.yml=]] builds and tests every push/PR on
+Linux, macOS and Windows, and separately checks =cargo fmt= and
+=cargo clippy=.
+
+Releases are cut with [[https://github.com/crate-ci/cargo-release][=cargo-release=]]
+(config in [[file:release.toml][=release.toml=]]), which bumps the version in
+=Cargo.toml=, commits, tags it =vX.Y.Z=, and pushes:
+
+#+begin_src sh
+  cargo install cargo-release   # once
+  cargo release patch           # dry run; or "minor"/"major"
+  cargo release patch --execute
+#+end_src
+
+Pushing the tag triggers [[file:.github/workflows/release.yml][=release.yml=]],
+which builds the =svfmt= binary for Linux, macOS (x86_64 and arm64) and
+Windows and attaches them to the GitHub Release it creates for that
+tag. =release.toml= sets =publish = false=, so this never runs
+=cargo publish= against crates.io.
+
+** VS Code extension
+
+[[file:tools/vscode-svfmt/][=tools/vscode-svfmt=]] wraps =svfmt --stdout -= as a
+=DocumentFormattingEditProvider= for =.sv=, =.svh=, =.v= and =.vh=
+files. See its README for install and packaging instructions.
+
+** Testing
+
+#+begin_src sh
+  cargo test
+#+end_src
+
+The test suite in =tests/format_tests.rs= carries a set of
+hand-formatted fixtures used to check the formatter against real HDL
+style; =tests/cli_tests.rs= exercises the command-line interface and
+configuration discovery.
+
+** License
+
+GPL-3.0-or-later, see [[file:LICENSE]].

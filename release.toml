@@ -1,0 +1,17 @@
+# Configuration for `cargo release` (https://github.com/crate-ci/cargo-release).
+#
+# Usage:
+#   cargo install cargo-release   # once
+#   cargo release patch           # dry run; add minor/major for those bumps
+#   cargo release patch --execute # bump Cargo.toml, commit, tag v<version>, push
+#
+# Pushing the tag triggers .github/workflows/release.yml, which builds
+# release binaries and attaches them to a GitHub Release for that tag.
+
+# This crate isn't published to crates.io; `cargo release` should only bump
+# the version, tag, and push -- never run `cargo publish`.
+publish = false
+
+tag-name = "v{{version}}"
+tag-message = "svfmt {{version}}"
+pre-release-commit-message = "chore: release {{version}}"
